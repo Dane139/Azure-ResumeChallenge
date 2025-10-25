@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
 
 env:
-  # Path to the Flask web app folder (CRUCIAL)
+  # Path to the Flask web app folder
   APP_LOCATION: 'frontend-flask' 
-  # Name of your Azure App Service resource
-  AZURE_WEBAPP_NAME: 'GetVisitorCount' # REPLACE with your actual App Service name
+  # New name of your Azure App Service resource (REPLACE THIS)
+  AZURE_WEBAPP_NAME: 'dane-flask-resume-app' 
   PYTHON_VERSION: '3.12'
 
 jobs:
