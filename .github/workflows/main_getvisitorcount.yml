@@ -6,15 +6,12 @@ on:
       - main
   workflow_dispatch:
 
-# CRITICAL FIX: Add permissions globally to authorize OIDC token generation
-permissions:
-  id-token: write # Allows the GitHub Actions runtime to generate the federated token
-  contents: read  # Allows the actions/checkout step to read the code
+# REMOVE permissions block entirely, as it's not needed for Publish Profile
+# We do not want to use OIDC permissions for this method.
 
 env:
-  # The path to your function app project subfolder (Crucial for monorepo deployments)
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'backend-function'
-  PYTHON_VERSION: '3.12' # Ensure this matches your Function App setting
+  PYTHON_VERSION: '3.12' 
 
 jobs:
   build:
@@ -33,16 +30,13 @@ jobs:
         run: |
           python -m venv venv
           source venv/bin/activate
-        # Run this step inside the 'backend-function' folder
         working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-        # Run this step inside the 'backend-function' folder
         working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
 
       - name: Zip artifact for deployment
-        # Zips the contents of the 'backend-function' folder
         run: zip -r release.zip ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/. -x *venv*
 
       - name: Upload artifact for deployment job
@@ -54,29 +48,26 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    # Permissions are inherited from the global block, but explicitly checked here is fine too
-    
+    # No explicit permissions block needed here
+
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: python-app
-          # Download the artifact into a specific folder
           path: deployment-artifact
 
       - name: Unzip artifact for deployment
         run: |
-          # Unzip the file from inside the downloaded folder
           unzip deployment-artifact/release.zip
           rm deployment-artifact/release.zip
-
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          # This should now succeed due to the global permissions fix
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B54E04B63C734EE4903C6E1321E8525A }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2ADB6B2531AD4F3592FD399536232343 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_4DC82AA8ADE04545392E2EFB60A9AE2B0 }}
+        
+      # CRITICAL CHANGE: REMOVE the old 'Login to Azure' step entirely.
 
       - name: 'Deploy to Azure Functions'
-        uses: Azure
+        uses: Azure/functions-action@v1
+        with:
+          app-name: 'dane-resume-api-prod' # Your NEW Function App Name
+          package: . 
+          # NEW LINE: Authenticate using the Publish Profile Secret
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
