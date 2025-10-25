@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
 
 env:
-  # Path to the Flask web app folder
+  # Path to the Flask web app folder (CRUCIAL)
   APP_LOCATION: 'frontend-flask' 
   # Name of your Azure App Service resource
-  AZURE_WEBAPP_NAME: 'dane-resumewebapp' # REPLACE with your actual App Service name
+  AZURE_WEBAPP_NAME: 'GetVisitorCount' # REPLACE with your actual App Service name
   PYTHON_VERSION: '3.12'
 
 jobs:
@@ -28,23 +28,23 @@ jobs:
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
-        # Crucial: Install dependencies from the Flask project folder
+        # CRUCIAL: Install dependencies from the Flask project folder
         working-directory: ${{ env.APP_LOCATION }}
 
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          # Use the same secrets generated for the Function App deployment
+          # Use the secrets generated during the Function App setup
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B54E04B63C734EE4903C6E1321E8525A }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2ADB6B2531AD4F3592FD399536232343 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_4DC82AA8ADE0454392E2EFB60A9AE2B0 }}
 
       - name: 'Deploy to Azure App Service'
-        # THIS IS THE CORRECT ACTION FOR APP SERVICE (Flask)
+        # THIS IS THE CORRECT ACTION FOR FLASK/APP SERVICE
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          # The source folder to deploy, which is your Flask app
+          # The source folder to deploy is the local folder we checked out
           package: ${{ env.APP_LOCATION }}
-          # Ensures App Service uses the correct startup file
+          # The Flask-specific command to start the Gunicorn server
           startup-command: 'gunicorn --bind=0.0.0.0 --workers=4 app:app'
