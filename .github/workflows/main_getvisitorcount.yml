@@ -11,8 +11,9 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
-  PYTHON_VERSION: '3.12' # set this to the python version to use (supports 3.6, 3.7, 3.8)
+  # The path to your function app project subfolder
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'backend-function' 
+  PYTHON_VERSION: '3.12' # Set this to the version your function app uses (3.12 is often default)
 
 jobs:
   build:
@@ -29,26 +30,32 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # --- START CHANGE 1: Navigate to Subfolder for Build ---
+      - name: Change directory to Function App project
+        run: cd ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        
       - name: Create and start virtual environment
         run: |
           python -m venv venv
           source venv/bin/activate
+        # NOTE: This step implicitly runs in the backend-function folder due to the 'cd' above
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+        # NOTE: This implicitly uses backend-function/requirements.txt
+      # --- END CHANGE 1 ---
 
       # Optional: Add step to run tests here
 
       - name: Zip artifact for deployment
-        run: zip release.zip ./* -r
-
+        # The zip command needs to run from the root of the project to package the correct folder structure
+        run: zip -r release.zip ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/. -x *venv*
+        
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            release.zip
-            !venv/
+          path: release.zip # Upload the zip file
 
   deploy:
     runs-on: ubuntu-latest
@@ -64,9 +71,7 @@ jobs:
           name: python-app
 
       - name: Unzip artifact for deployment
-        run: |
-          unzip release.zip
-          rm release.zip
+        run: unzip release.zip
         
       - name: Login to Azure
         uses: azure/login@v2
@@ -77,9 +82,7 @@ jobs:
 
       - name: 'Deploy to Azure Functions'
         uses: Azure/functions-action@v1
-        id: deploy-to-function
         with:
-          app-name: 'GetVisitorCount'
-          slot-name: 'Production'
-          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          
+          app-name: 'GetVisitorCount' # The name of your Function App
+          package: release.zip # The name of the zip file
+          # The deployment action is smart enough to find the code because we zipped the subfolder
