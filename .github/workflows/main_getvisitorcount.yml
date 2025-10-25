@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
 
 env:
-  # The path to your function app project subfolder
+  # The path to your function app project subfolder (Crucial for subfolder deployments)
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'backend-function' 
-  PYTHON_VERSION: '3.12' # Set this to the version your function app uses (3.12 is often default)
+  PYTHON_VERSION: '3.12' # Ensure this matches your Function App setting
 
 jobs:
   build:
@@ -30,27 +30,24 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      # --- START CHANGE 1: Navigate to Subfolder for Build ---
-      - name: Change directory to Function App project
-        run: cd ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-        
       - name: Create and start virtual environment
         run: |
           python -m venv venv
           source venv/bin/activate
-        # NOTE: This step implicitly runs in the backend-function folder due to the 'cd' above
+        # CRUCIAL FIX: Run this step inside the 'backend-function' folder
+        working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} 
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-        # NOTE: This implicitly uses backend-function/requirements.txt
-      # --- END CHANGE 1 ---
-
-      # Optional: Add step to run tests here
+        # CRUCIAL FIX: Run this step inside the 'backend-function' folder
+        working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        
+      # Optional: Add step to run tests here (place inside the subfolder using working-directory)
 
       - name: Zip artifact for deployment
-        # The zip command needs to run from the root of the project to package the correct folder structure
+        # This zips the contents of the 'backend-function' folder, ensuring the correct structure for Azure
         run: zip -r release.zip ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/. -x *venv*
-        
+
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
@@ -71,18 +68,4 @@ jobs:
           name: python-app
 
       - name: Unzip artifact for deployment
-        run: unzip release.zip
-        
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B54E04B63C734EE4903C6E1321E8525A }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2ADB6B2531AD4F3592FD399536232343 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_4DC82AA8ADE0454392E2EFB60A9AE2B0 }}
-
-      - name: 'Deploy to Azure Functions'
-        uses: Azure/functions-action@v1
-        with:
-          app-name: 'GetVisitorCount' # The name of your Function App
-          package: release.zip # The name of the zip file
-          # The deployment action is smart enough to find the code because we zipped the subfolder
+        run: unzip release.
