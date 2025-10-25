@@ -1,5 +1,3 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
-
 name: Build and deploy Python project to Azure Function App - GetVisitorCount
 
 on:
@@ -7,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+
+# CRITICAL FIX: Add permissions globally to authorize OIDC token generation
+permissions:
+  id-token: write # Allows the GitHub Actions runtime to generate the federated token
+  contents: read  # Allows the actions/checkout step to read the code
 
 env:
   # The path to your function app project subfolder (Crucial for monorepo deployments)
@@ -16,9 +19,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,56 +33,50 @@ jobs:
         run: |
           python -m venv venv
           source venv/bin/activate
-        # CRUCIAL FIX: Run this step inside the 'backend-function' folder
+        # Run this step inside the 'backend-function' folder
         working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-        # CRUCIAL FIX: Run this step inside the 'backend-function' folder
+        # Run this step inside the 'backend-function' folder
         working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
 
       - name: Zip artifact for deployment
-        # Zips the contents of the 'backend-function' folder, ensuring correct deployment structure
+        # Zips the contents of the 'backend-function' folder
         run: zip -r release.zip ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/. -x *venv*
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: release.zip # Upload the zip file from the root directory of the runner
+          path: release.zip
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    permissions:
-      id-token: write # Required for requesting the JWT for OIDC authentication
-      contents: read
-
+    # Permissions are inherited from the global block, but explicitly checked here is fine too
+    
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: python-app
-          # CRUCIAL FIX 1: Download the artifact into a specific folder
+          # Download the artifact into a specific folder
           path: deployment-artifact
 
       - name: Unzip artifact for deployment
         run: |
-          # CRUCIAL FIX 2: Unzip the file from inside the downloaded folder
+          # Unzip the file from inside the downloaded folder
           unzip deployment-artifact/release.zip
           rm deployment-artifact/release.zip
 
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          # Use the secrets generated during the setup process
+          # This should now succeed due to the global permissions fix
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B54E04B63C734EE4903C6E1321E8525A }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2ADB6B2531AD4F3592FD399536232343 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_4DC82AA8ADE04545392E2EFB60A9AE2B0 }}
 
       - name: 'Deploy to Azure Functions'
-        uses: Azure/functions-action@v1
-        with:
-          app-name: 'dane-resume-api-prod' # Use your NEW Function App Name
-          # The package is now available in the root of the runner environment after unzipping
-          package: .
+        uses: Azure
