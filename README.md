@@ -16,3 +16,6 @@ https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a
 - Front folder contains the website.
 - main.js contains visitor counter code.
 
+trying to get azure function core tools installed took ages
+https://github.com/Azure/azure-functions-core-tools/releases
+found the msi and installed
