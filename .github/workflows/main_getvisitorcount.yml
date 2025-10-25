@@ -1,6 +1,4 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-# More info on Python, GitHub Actions, and Azure Functions: https://aka.ms/python-webapps-actions
 
 name: Build and deploy Python project to Azure Function App - GetVisitorCount
 
@@ -11,15 +9,15 @@ on:
   workflow_dispatch:
 
 env:
-  # The path to your function app project subfolder (Crucial for subfolder deployments)
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'backend-function' 
+  # The path to your function app project subfolder (Crucial for monorepo deployments)
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'backend-function'
   PYTHON_VERSION: '3.12' # Ensure this matches your Function App setting
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -35,37 +33,55 @@ jobs:
           python -m venv venv
           source venv/bin/activate
         # CRUCIAL FIX: Run this step inside the 'backend-function' folder
-        working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} 
+        working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
 
       - name: Install dependencies
         run: pip install -r requirements.txt
         # CRUCIAL FIX: Run this step inside the 'backend-function' folder
         working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-        
-      # Optional: Add step to run tests here (place inside the subfolder using working-directory)
 
       - name: Zip artifact for deployment
-        # This zips the contents of the 'backend-function' folder, ensuring the correct structure for Azure
+        # Zips the contents of the 'backend-function' folder, ensuring correct deployment structure
         run: zip -r release.zip ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/. -x *venv*
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: release.zip # Upload the zip file
+          path: release.zip # Upload the zip file from the root directory of the runner
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+      id-token: write # Required for requesting the JWT for OIDC authentication
+      contents: read
 
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: python-app
+          # CRUCIAL FIX 1: Download the artifact into a specific folder
+          path: deployment-artifact
 
       - name: Unzip artifact for deployment
-        run: unzip release.
+        run: |
+          # CRUCIAL FIX 2: Unzip the file from inside the downloaded folder
+          unzip deployment-artifact/release.zip
+          rm deployment-artifact/release.zip
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          # Use the secrets generated during the setup process
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B54E04B63C734EE4903C6E1321E8525A }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2ADB6B2531AD4F3592FD399536232343 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_4DC82AA8ADE04545392E2EFB60A9AE2B0 }}
+
+      - name: 'Deploy to Azure Functions'
+        uses: Azure/functions-action@v1
+        with:
+          app-name: 'dane-resume-api-prod' # Use your NEW Function App Name
+          # The package is now available in the root of the runner environment after unzipping
+          package: .
